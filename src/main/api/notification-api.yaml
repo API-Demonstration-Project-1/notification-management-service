@@ -1,0 +1,354 @@
+swagger: '2.0'
+info:
+  version: 'v1'
+  title: Notification Management API
+  contact: {}
+host: www.proarchs.com
+basePath: /pnms
+schemes:
+- http
+consumes:
+- application/json
+produces:
+- application/json
+paths:
+  /otpverification:
+    post:
+      description: Add a new Otpverification
+      summary: Otpverification_POST
+      tags:
+      - otpverification
+      operationId: Otpverification_POST
+      deprecated: false
+      produces:
+      - application/json
+      parameters:
+      - name: body
+        in: body
+        required: true
+        description: ''
+        schema:
+          $ref: '#/definitions/Otpverification'
+      responses:
+        201:
+          description: ''
+          schema:
+            $ref: '#/definitions/Otpverificationresponse'
+          examples:
+            application/json:
+              success: true
+              message: Verification sent successfully/Verification check done successfully
+              data:
+                id: 123
+              error_code: 400
+          headers: {}
+    get:
+      description: Get a list of Otpverification
+      summary: Otpverification_GET
+      tags:
+      - otpverification
+      operationId: Otpverification_GET
+      deprecated: false
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        200:
+          description: ''
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/Otpverification'
+          headers: {}
+  /otpverificationcheck:
+    post:
+      description: Add a new Otpverificationcheck
+      summary: Otpverificationcheck_POST
+      tags:
+      - otpverificationcheck
+      operationId: Otpverificationcheck_POST
+      deprecated: false
+      produces:
+      - application/json
+      parameters:
+      - name: body
+        in: body
+        required: true
+        description: ''
+        schema:
+          $ref: '#/definitions/Otpverificationcheck'
+      responses:
+        201:
+          description: ''
+          schema:
+            $ref: '#/definitions/Otpverificationcheckresponse'
+          examples:
+            application/json:
+              success: true
+              message: Verification sent successfully/Verification check done successfully
+              data:
+                id: 123
+              error_code: 400
+          headers: {}
+    get:
+      description: Get a list of Otpverificationcheck
+      summary: Otpverificationcheck_GET
+      tags:
+      - otpverificationcheck
+      operationId: Otpverificationcheck_GET
+      deprecated: false
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        200:
+          description: ''
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/Otpverificationcheck'
+          headers: {}
+  /emailverification:
+    post:
+      description: Add a new Emailverification
+      summary: Emailverification_POST
+      tags:
+      - emailverification
+      operationId: Emailverification_POST
+      deprecated: false
+      produces:
+      - application/json
+      parameters:
+      - name: body
+        in: body
+        required: true
+        description: ''
+        schema:
+          $ref: '#/definitions/Emailverification'
+      responses:
+        201:
+          description: ''
+          schema:
+            $ref: '#/definitions/Emailverificationresponse'
+          examples:
+            application/json:
+              success: true
+              message: Verification sent successfully/Verification check done successfully
+              data:
+                id: 123
+              error_code: 400
+          headers: {}
+    get:
+      description: Get a list of Emailverification
+      summary: Emailverification_GET
+      tags:
+      - emailverification
+      operationId: Emailverification_GET
+      deprecated: false
+      produces:
+      - application/json
+      parameters: []
+      responses:
+        200:
+          description: ''
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/Emailverification'
+          headers: {}
+  /emailverification/{verificationId}/emailverificationcheck:
+    get:
+      summary: EmailverificationEmailverificationcheck_GET
+      tags:
+      - emailverification
+      operationId: EmailverificationEmailverificationcheck_GET
+      deprecated: false
+      produces:
+      - application/json
+      parameters:
+      - name: verificationId
+        in: path
+        required: true
+        type: string
+        description: ''
+      - name: code
+        in: query
+        required: true
+        type: string
+        description: This is the Verification Code
+      responses:
+        200:
+          description: ''
+          headers: {}
+definitions:
+  Otpverification:
+    title: Otpverification
+    type: object
+    properties:
+      mobileNum:
+        description: Mobile No. of the Customer
+        type: string
+      emailId:
+        description: Email of the Customer
+        type: string
+    required:
+    - mobileNum
+    - emailId
+  Otpverificationcheck:
+    title: Otpverificationcheck
+    type: object
+    properties:
+      mobileNum:
+        description: Mobile No. of the Customer
+        type: string
+      emailId:
+        description: Email of the Customer
+        type: string
+      code:
+        description: Received OTP
+        type: string
+    required:
+    - code
+  Emailverification:
+    title: Emailverification
+    type: object
+    properties:
+      name:
+        description: Name of the Customer
+        type: string
+      emailId:
+        description: Email of the Customer
+        type: string
+      systemName:
+        description: System Name
+        type: string
+      systemShortName:
+        description: System Short Name
+        type: string
+      systemDesc:
+        description: Description about the System
+        type: string
+    required:
+    - name
+    - emailId
+    - systemName
+    - systemShortName
+    - systemDesc
+  Emailverificationcheck:
+    title: Emailverificationcheck
+    type: object
+    properties:
+      verificationCode:
+        description: This is the Verification Code
+        type: string
+    required:
+    - verificationCode
+  Error:
+    title: Error
+    type: object
+    properties:
+      message:
+        description: This is the Verification-related message
+        type: string
+      success:
+        description: True or False
+        type: boolean
+      data:
+        description: This is any data
+        type: object
+      errorCode:
+        description: This is gives error code info
+        type: integer
+        format: int32
+    required:
+    - message
+    - success
+  Data:
+    title: Data
+    example:
+      id: 123
+    type: object
+    properties:
+      id:
+        type: string
+    required:
+    - id
+  Emailverificationresponse:
+    title: Emailverificationresponse
+    example:
+      success: true
+      message: Verification sent successfully/Verification check done successfully
+      data:
+        id: 123
+      error_code: 400
+    type: object
+    properties:
+      success:
+        type: boolean
+      message:
+        type: string
+      data:
+        $ref: '#/definitions/Data'
+      error_code:
+        type: integer
+        format: int32
+    required:
+    - success
+    - message
+    - data
+    - error_code
+  Otpverificationresponse:
+    title: Otpverificationresponse
+    example:
+      success: true
+      message: Verification sent successfully/Verification check done successfully
+      data:
+        id: 123
+      error_code: 400
+    type: object
+    properties:
+      success:
+        type: boolean
+      message:
+        type: string
+      data:
+        $ref: '#/definitions/Data'
+      error_code:
+        type: integer
+        format: int32
+    required:
+    - success
+    - message
+    - data
+    - error_code
+  Otpverificationcheckresponse:
+    title: Otpverificationcheckresponse
+    example:
+      success: true
+      message: Verification sent successfully/Verification check done successfully
+      data:
+        id: 123
+      error_code: 400
+    type: object
+    properties:
+      success:
+        type: boolean
+      message:
+        type: string
+      data:
+        $ref: '#/definitions/Data'
+      error_code:
+        type: integer
+        format: int32
+    required:
+    - success
+    - message
+    - data
+    - error_code
+tags:
+- name: otpverification
+  description: ''
+- name: otpverificationcheck
+  description: ''
+- name: emailverification
+  description: ''

@@ -1,0 +1,45 @@
+#%RAML 1.0
+
+title: Notification Management API
+version: v1
+baseUri: http://www.proarchs.com/pnms
+
+types:
+  Otpverification: !include types/Otpverification.raml
+  Otpverificationcheck: !include types/Otpverificationcheck.raml
+  Emailverification: !include types/Emailverification.raml
+  Emailverificationcheck: !include types/Emailverificationcheck.raml
+  Error: !include types/Error.raml
+
+resourceTypes:
+  collection: !include resourceTypes/collection.raml
+  collection-item: !include resourceTypes/collection-item.raml
+
+traits:
+  hasRequestItem: !include traits/hasRequestItem.raml
+  hasRequestItemWithResponseMessage: !include traits/hasRequestItemWithResponseMessage.raml
+  hasResponseItem: !include traits/hasResponseItem.raml
+  hasResponseCollection: !include traits/hasResponseCollection.raml
+  hasNotFound: !include traits/hasNotFound.raml
+  hasBadRequest: !include traits/hasBadRequest.raml
+  hasForbidden: !include traits/hasForbidden.raml
+  hasUnauthorized: !include traits/hasUnauthorized.raml
+
+
+/otpverification:
+    type: collection
+
+/otpverificationcheck:
+    type: collection
+
+/emailverification:
+    type: collection
+
+    /{verificationId}:
+        /emailverificationcheck:
+            get:
+              queryParameters:
+                code:
+                  description: This is the Verification Code
+                  required: true
+                  type: string
