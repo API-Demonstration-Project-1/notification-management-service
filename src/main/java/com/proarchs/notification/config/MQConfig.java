@@ -13,13 +13,13 @@ import org.springframework.jms.core.JmsTemplate;
 @EnableJms
 public class MQConfig {
 	
-	@Value("${activemq.broker-url}")
+	@Value("${spring.activemq.broker-url}")
 	private String brokerUrl;
 
-	@Value("${activemq.notification.otpverification}")
+	@Value("${activemq.notification.otpverification.inbound}")
 	private String otpVerificationQueue;
 	
-	@Value("${activemq.notification.otpverificationconfirmation}")
+	@Value("${activemq.notification.otpverificationconfirmation.outbound}")
 	private String otpVerificationConfirmationQueue;
 
 	@Bean
@@ -31,7 +31,7 @@ public class MQConfig {
 	}
 
 	@Bean
-	public DefaultJmsListenerContainerFactory notificationDefaultJmsListenerContainerFactory() {
+	public DefaultJmsListenerContainerFactory jmsListenerContainerFactory() {
 		DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
 		factory.setConnectionFactory(receiverMQConnectionFactory());
 		factory.setConcurrency("3-10");
