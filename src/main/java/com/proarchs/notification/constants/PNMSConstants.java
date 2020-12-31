@@ -61,7 +61,8 @@ public class PNMSConstants {
 	public static final String CHANNEL_SMS = "sms";
 	public static final String CHANNEL_EMAIL = "email";
 	
-	public static final String OTPCHECK_APPROVED = "approved";
+	public static final String OTPCHECK_APPROVED = "Approved";
+	public static final String OTPCHECK_NOTAPPROVED = "NotApproved";
 	
 	public static final String REG_VERIFICATION_EMAILSUBJECT = "Registration Verification";
 	public static final String REG_VERIFICATION_CONFIRMATION_EMAILSUBJECT = "Registration Verification Confirmation";

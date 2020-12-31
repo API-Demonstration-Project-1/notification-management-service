@@ -21,6 +21,9 @@ public class MQConfig {
 	
 	@Value("${activemq.notification.otpverificationconfirmation.outbound}")
 	private String otpVerificationConfirmationQueue;
+	
+	@Value("${activemq.notification.emailverificationconfirmation.outbound}")
+	private String emailVerificationConfirmationQueue;
 
 	@Bean
 	public ActiveMQConnectionFactory receiverMQConnectionFactory() {
@@ -56,6 +59,14 @@ public class MQConfig {
 	public JmsTemplate otpVerificationConfirmationJmsTemplate() {
 		JmsTemplate jmsTemplate = new JmsTemplate(cachingConnectionFactory());
 		jmsTemplate.setDefaultDestinationName(otpVerificationConfirmationQueue);
+
+		return jmsTemplate;
+	}
+	
+	@Bean
+	public JmsTemplate emailVerificationConfirmationJmsTemplate() {
+		JmsTemplate jmsTemplate = new JmsTemplate(cachingConnectionFactory());
+		jmsTemplate.setDefaultDestinationName(emailVerificationConfirmationQueue);
 
 		return jmsTemplate;
 	}

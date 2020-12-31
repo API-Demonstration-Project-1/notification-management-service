@@ -5,10 +5,14 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jms.core.JmsTemplate;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.proarchs.notification.constants.PNMSConstants;
+import com.proarchs.notification.exception.MismatchException;
 import com.proarchs.notification.exception.NotFoundException;
 import com.proarchs.notification.factory.POJOFactory;
 import com.proarchs.notification.factory.UIModelFactory;
@@ -17,6 +21,7 @@ import com.proarchs.notification.model.EmailRegVerificationInfo;
 import com.proarchs.notification.model.Emailverification;
 import com.proarchs.notification.repository.EmailRegVerificationRepository;
 import com.proarchs.notification.util.EmailSender;
+import com.proarchs.notification.util.JsonFormatter;
 import com.proarchs.notification.util.RandomStringGenerator;
 import com.twilio.Twilio;
 import com.twilio.rest.verify.v2.service.Verification;
@@ -36,6 +41,10 @@ public class NotificationService {
 
 	@Value("${twilio.service.verification.sid}")
 	private String twilioVerificationServiceID;
+	
+	@Autowired
+	@Qualifier("emailVerificationConfirmationJmsTemplate")
+	private JmsTemplate emailVerificationConfirmationJmsTemplate;
 	
 	public String sendOTPVerificationToken(String mobileNum, String emailId) {
 		Twilio.init(twilioAcctSID, twilioAuthToken);
@@ -59,7 +68,7 @@ public class NotificationService {
 
 		VerificationCheck verificationCheck = VerificationCheck.creator(twilioVerificationServiceID, code).setTo(mobileNumOrEmailId).create();
 
-		return verificationCheck.getStatus();
+		return verificationCheck.getValid() ? PNMSConstants.OTPCHECK_APPROVED : PNMSConstants.OTPCHECK_NOTAPPROVED;
 
 	}
 
@@ -104,8 +113,7 @@ public class NotificationService {
 		return verificationInfo.getVerificationId();
 	}
 
-	
-	public void checkEmailVerification(Integer verificationId, String code) throws NotFoundException, IllegalAccessException, InstantiationException {
+	public void checkEmailVerification(Integer verificationId, String code) throws NotFoundException, MismatchException, IllegalAccessException, InstantiationException, JsonProcessingException {
 		// Update 'VERIFICATION_CODE to null if matches
 		Optional<EmailRegVerificationInfo> verificationInfoOpt = repo.findById(verificationId);
 		
@@ -119,9 +127,20 @@ public class NotificationService {
 			verificationInfo.setVerificationCode(null);
 			
 			repo.save(verificationInfo);
-		} else {}
+		} else {
+			throw new MismatchException(500, "PNMS - Verification Code Does Not Match");
+		}
 		
-		// Prepare contents required for Email
+		// Prepare the response & send it to the Outbound Queue - START
+		Map<String, String> elements = new HashMap<String, String>(1);
+	    elements.put("verificationId", verificationInfo.getVerificationId().toString());
+	    
+	    String jsonResp = JsonFormatter.convertMapToJson(elements);
+	    
+	    emailVerificationConfirmationJmsTemplate.convertAndSend(jsonResp);
+	    // Prepare the response & send it to the Outbound Queue - END
+		
+		// Prepare contents required for Email - START
 		EmailInfo emailInfo = (EmailInfo) UIModelFactory.getInstance("EMAILINFO");
 		
 		emailInfo.setFromAddress(fromAddress);
@@ -134,6 +153,7 @@ public class NotificationService {
 		contextVariables.put("systemShortName", verificationInfo.getSystemName().toUpperCase());
 	
 		emailInfo.setContextVariables(contextVariables);
+		// Prepare contents required for Email - END
 		
 		// Send the Email
 		mailSender.sendMail(emailInfo);

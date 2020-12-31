@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.proarchs.notification.constants.PNMSConstants;
 import com.proarchs.notification.model.Otpverificationcheck;
-import com.proarchs.notification.model.Otpverificationcheckresponse;
 import com.proarchs.notification.services.NotificationService;
 import com.proarchs.notification.util.ResponsePreparator;
 import com.twilio.exception.ApiException;
@@ -72,6 +71,12 @@ public class OtpverificationcheckApiController implements OtpverificationcheckAp
                 	log.info("otpverificationcheckPOST() exited");
                 	
                 	return new ResponseEntity<String>(resp, HttpStatus.CREATED);
+            	} else {
+            		String resp = ResponsePreparator.prepareOtpVerificationCheckResponse(null, "OTP Verification Failed - OTP Not Valid", true, null);
+                	
+                	log.info("otpverificationcheckPOST() exited");
+                	
+                	return new ResponseEntity<String>(resp, HttpStatus.BAD_REQUEST);
             	}
             } catch (ApiException ae) {
             	log.info("otpverificationcheckPOST() exited with Errors");

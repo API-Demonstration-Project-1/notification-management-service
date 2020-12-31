@@ -4,25 +4,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import javax.mail.internet.MimeMessage;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jms.annotation.JmsListener;
-import org.springframework.jms.core.JmsTemplate;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.mail.javamail.MimeMessagePreparator;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.handler.annotation.SendTo;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.thymeleaf.TemplateEngine;
-import org.thymeleaf.context.Context;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -33,9 +22,8 @@ import com.proarchs.notification.factory.POJOFactory;
 import com.proarchs.notification.factory.UIModelFactory;
 import com.proarchs.notification.model.EmailInfo;
 import com.proarchs.notification.model.EmailRegVerificationInfo;
-import com.proarchs.notification.model.Emailverification;
 import com.proarchs.notification.repository.EmailRegVerificationRepository;
-import com.proarchs.notification.util.EmailTemplateLoader;
+import com.proarchs.notification.util.EmailSender;
 import com.proarchs.notification.util.JsonFormatter;
 import com.proarchs.notification.util.RandomStringGenerator;
 import com.twilio.Twilio;
@@ -57,7 +45,7 @@ public class JMSNotificationService {
 	private String twilioVerificationServiceID;
 	
 	@Autowired
-	JmsTemplate jmsTemplate;
+	private EmailSender mailSender;
 
 	@JmsListener(destination = "${activemq.notification.otpverification.inbound}")
 	@SendTo("${activemq.notification.otpverification.outbound}")
@@ -123,64 +111,85 @@ public class JMSNotificationService {
 	@Value("${notification.email.defaultFromAddress}")
 	private String fromAddress;
 
-	@Qualifier("emailTemplateEngine")
-	@Autowired
-	private TemplateEngine stringTemplateEngine;
-
 	@Autowired
 	private EmailRegVerificationRepository repo;
 	
-	private static final String BACKGROUND_IMAGE = "email-templates/images/background.png";
-	private static final String LOGO_BACKGROUND_IMAGE = "email-templates/images/logo-background.png";
-	private static final String THYMELEAF_BANNER_IMAGE = "email-templates/images/proarchs_logo_orange_bkg.jpg";
 
-	private static final String PNG_MIME = "image/png";
-
-	@Autowired
-	private JavaMailSender javaMailSender;
-	
-	public Integer sendEmailVerification(Emailverification requestInfo) throws IllegalAccessException, InstantiationException {
-		// Save the Info into DB
+	@JmsListener(destination = "${activemq.notification.emailverification.inbound}")
+	@SendTo("${activemq.notification.emailverification.outbound}")
+	public String sendEmailVerification(final Message<String> jmsMessage) throws IllegalAccessException, InstantiationException, JsonMappingException, JsonProcessingException {
+		
+		// Extract all field values from JSON
+		JsonNode nodes = JsonFormatter.convertStringToJsonNode(jmsMessage.getPayload());
+		String tenantId = nodes.get("tenantId").textValue();
+		String name = nodes.get("name").textValue();
+		String emailId = nodes.get("emailId").textValue();
+		String systemName = nodes.get("systemName").textValue();
+		String systemShortName = nodes.get("systemShortName").textValue();
+		String systemDesc = nodes.get("systemDesc").textValue();
+		
+		// Save the Info into DB - START
 		EmailRegVerificationInfo verificationInfo = (EmailRegVerificationInfo)POJOFactory.getInstance("EMAILREGVERIFICATIONINFO");
 		
-		verificationInfo.setName(requestInfo.getName());
-		verificationInfo.setEmail(requestInfo.getEmailId());
-		verificationInfo.setSystemName(requestInfo.getSystemShortName());
+		verificationInfo.setName(name);
+		verificationInfo.setEmail(emailId);
+		verificationInfo.setSystemName(systemShortName);
 		verificationInfo.setVerificationCode(RandomStringGenerator.getRandomAlphaNumericString(15));
 		
 		repo.save(verificationInfo);
+		// Save the Info into DB - END
 		
 		// Prepare contents required for Email
 		EmailInfo emailInfo = (EmailInfo) UIModelFactory.getInstance("EMAILINFO");
 		
 		emailInfo.setFromAddress(fromAddress);
-		emailInfo.setToAddress(requestInfo.getEmailId());
-		emailInfo.setSubject(requestInfo.getSystemShortName().toUpperCase() + PNMSConstants.SINGLE_SPACE + PNMSConstants.HYPEN_SEPARATOR + PNMSConstants.SINGLE_SPACE + PNMSConstants.REG_VERIFICATION_EMAILSUBJECT);
+		emailInfo.setToAddress(emailId);
+		emailInfo.setSubject(systemShortName.toUpperCase() + PNMSConstants.SINGLE_SPACE + PNMSConstants.HYPEN_SEPARATOR + PNMSConstants.SINGLE_SPACE + PNMSConstants.REG_VERIFICATION_EMAILSUBJECT);
 		emailInfo.setTemplateName(PNMSConstants.WELCOME_TEMPLATE_KEY);
 
 		Map<String, Object> contextVariables = new HashMap<String, Object>(6);
-		contextVariables.put("name", verificationInfo.getName());
-		contextVariables.put("systemName", requestInfo.getSystemName());
-		contextVariables.put("systemShortName", requestInfo.getSystemShortName().toUpperCase());
-		contextVariables.put("systemDesc", requestInfo.getSystemDesc());
+		contextVariables.put("name", name);
+		contextVariables.put("systemName", systemName);
+		contextVariables.put("systemShortName", systemShortName.toUpperCase());
+		contextVariables.put("systemDesc", systemDesc);
 		contextVariables.put("verificationId", verificationInfo.getVerificationId());
 		contextVariables.put("verificationCode", verificationInfo.getVerificationCode());
 	
 		emailInfo.setContextVariables(contextVariables);
 		
 		// Send the Email
-		sendEmail(emailInfo);
+		mailSender.sendMail(emailInfo);
 		
-		return verificationInfo.getVerificationId();
+		// Prepare the response & send it to the Outbound Queue
+		Map<String, String> elements = new HashMap<String, String>();
+	    elements.put("tenantId", tenantId);
+	    elements.put("verificationId", verificationInfo.getVerificationId().toString());
+	    
+	    String jsonResp = JsonFormatter.convertMapToJson(elements);
+	    
+		return jsonResp;
 	}
 
-	
-	public void checkEmailVerification(Integer verificationId, String code) throws NotFoundException, IllegalAccessException, InstantiationException {
+	@JmsListener(destination = "${activemq.notification.emailverificationconfirmation.inbound}")
+	@SendTo("${activemq.notification.emailverificationconfirmation.outbound}")
+	public String checkEmailVerification(final Message<String> jmsMessage) throws NotFoundException, IllegalAccessException, InstantiationException, JsonMappingException, JsonProcessingException {
+		
+		// Extract all field values from JSON
+		JsonNode nodes = JsonFormatter.convertStringToJsonNode(jmsMessage.getPayload());
+		String verificationId = nodes.get("verificationId").textValue();
+		String code = nodes.get("code").textValue();
+				
 		// Update 'VERIFICATION_CODE to null if matches
-		Optional<EmailRegVerificationInfo> verificationInfoOpt = repo.findById(verificationId);
+		Optional<EmailRegVerificationInfo> verificationInfoOpt = repo.findById(Integer.parseInt(verificationId));
 		
 		if (!verificationInfoOpt.isPresent()) {
-			throw new NotFoundException(404, "PNMS - Verification Entry Not Found");
+			// Prepare the error response & send it to the Outbound Queue
+			Map<String, String> elements = new HashMap<String, String>(1);
+		    elements.put("notfoundError", "PNMS - Verification Entry Not Found");
+		    
+		    String jsonResp = JsonFormatter.convertMapToJson(elements);
+		    
+			return jsonResp;
 		} 
 
 		EmailRegVerificationInfo verificationInfo = verificationInfoOpt.get();
@@ -189,7 +198,15 @@ public class JMSNotificationService {
 			verificationInfo.setVerificationCode(null);
 			
 			repo.save(verificationInfo);
-		} else {}
+		} else {
+			// Prepare the error response & send it to the Outbound Queue
+			Map<String, String> elements = new HashMap<String, String>(1);
+		    elements.put("mismatchError", "PNMS - Verification Code Does Not Match");
+		    
+		    String jsonResp = JsonFormatter.convertMapToJson(elements);
+		    
+			return jsonResp;
+		}
 		
 		// Prepare contents required for Email
 		EmailInfo emailInfo = (EmailInfo) UIModelFactory.getInstance("EMAILINFO");
@@ -206,36 +223,14 @@ public class JMSNotificationService {
 		emailInfo.setContextVariables(contextVariables);
 		
 		// Send the Email
-		sendEmail(emailInfo);
-	}
-	
-	@Async
-	private void sendEmail(EmailInfo emailInfo) {
-		MimeMessagePreparator preparator = new MimeMessagePreparator() {
-
-			public void prepare(MimeMessage mimeMessage) throws Exception {
-				mimeMessage.addHeader("Content-Type", PNMSConstants.JSON_CONTENT_TYPE);
-
-				final MimeMessageHelper message = new MimeMessageHelper(mimeMessage, true, PNMSConstants.UNICODE_ENCODING_TYPE);
-				message.setFrom(emailInfo.getFromAddress());
-				message.setTo(emailInfo.getToAddress());
-				message.setSubject(emailInfo.getSubject());
-				
-				Context ctx = new Context();
-				emailInfo.getContextVariables().forEach((key,value) -> ctx.setVariable(key, value));
-
-				// Create the HTML body using Thymeleaf
-				String bodyContent = stringTemplateEngine.process(EmailTemplateLoader.getTemplate(emailInfo.getTemplateName()), ctx);
-				message.setText(bodyContent, true /* isHtml */);
-
-				// Add the inline images, referenced from the HTML code as "cid:image-name"
-				message.addInline("background", new ClassPathResource(BACKGROUND_IMAGE), PNG_MIME);
-				message.addInline("logo-background", new ClassPathResource(LOGO_BACKGROUND_IMAGE), PNG_MIME);
-				message.addInline("thymeleaf-banner", new ClassPathResource(THYMELEAF_BANNER_IMAGE), PNG_MIME);
-			}
-		};
+		mailSender.sendMail(emailInfo);
 		
-		// Send email
-		javaMailSender.send(preparator);
+		// Prepare the response & send it to the Outbound Queue
+		Map<String, String> elements = new HashMap<String, String>(1);
+	    elements.put("verificationId", verificationInfo.getVerificationId().toString());
+	    
+	    String jsonResp = JsonFormatter.convertMapToJson(elements);
+	    
+		return jsonResp;
 	}
 }
