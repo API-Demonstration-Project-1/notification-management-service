@@ -26,6 +26,7 @@ import com.proarchs.notification.repository.EmailRegVerificationRepository;
 import com.proarchs.notification.util.EmailSender;
 import com.proarchs.notification.util.JsonFormatter;
 import com.proarchs.notification.util.RandomStringGenerator;
+
 import com.twilio.Twilio;
 import com.twilio.rest.verify.v2.service.Verification;
 import com.twilio.rest.verify.v2.service.VerificationCheck;
@@ -99,13 +100,18 @@ public class JMSNotificationService {
 		VerificationCheck verificationCheck = VerificationCheck.creator(twilioVerificationServiceID, code).setTo(mobileNumOrEmailId).create();
 		// Verify OTP - END
 
-		// Prepare the response & send it to the Outbound Queue
-		Map<String, String> elements = new HashMap<String, String>();
-	    elements.put("verificationId", verificationCheck.getSid());
-	    
+		// Prepare the response & send it to the Outbound Queue - START
+		Map<String, String> elements = new HashMap<String, String>(1);
+		if (verificationCheck.getValid() && verificationCheck.getStatus().equals("approved")) {
+		    elements.put("verificationId", verificationCheck.getSid());
+		} else {
+		    elements.put("mismatchError", "PNMS - Verification Code Does Not Match");
+		}
+		    
 	    String jsonResp = JsonFormatter.convertMapToJson(elements);
 	    
 		return jsonResp;
+		// Prepare the response & send it to the Outbound Queue - END
 	}
 
 	@Value("${notification.email.defaultFromAddress}")
