@@ -17,8 +17,10 @@ import com.proarchs.notification.exception.NotFoundException;
 import com.proarchs.notification.factory.POJOFactory;
 import com.proarchs.notification.factory.UIModelFactory;
 import com.proarchs.notification.model.EmailInfo;
-import com.proarchs.notification.model.EmailRegVerificationInfo;
 import com.proarchs.notification.model.Emailverification;
+import com.proarchs.notification.model.Otpverification;
+import com.proarchs.notification.model.Otpverificationcheck;
+import com.proarchs.notification.model.RegVerificationInfo;
 import com.proarchs.notification.repository.EmailRegVerificationRepository;
 import com.proarchs.notification.util.EmailSender;
 import com.proarchs.notification.util.JsonFormatter;
@@ -29,9 +31,6 @@ import com.twilio.rest.verify.v2.service.VerificationCheck;
 
 @Service
 public class NotificationService {
-	
-	@Autowired
-	private EmailSender mailSender;
 
 	@Value("${twilio.acctsid}")
 	private String twilioAcctSID;
@@ -42,45 +41,87 @@ public class NotificationService {
 	@Value("${twilio.service.verification.sid}")
 	private String twilioVerificationServiceID;
 	
-	@Autowired
-	@Qualifier("emailVerificationConfirmationJmsTemplate")
-	private JmsTemplate emailVerificationConfirmationJmsTemplate;
-	
-	public String sendOTPVerificationToken(String mobileNum, String emailId) {
-		Twilio.init(twilioAcctSID, twilioAuthToken);
-
-		// via SMS
-		Verification smsVerification = Verification
-				.creator(twilioVerificationServiceID, mobileNum, PNMSConstants.CHANNEL_SMS).create();
-
-		// via Email
-		Verification emailVerification = Verification
-				.creator(twilioVerificationServiceID, emailId, PNMSConstants.CHANNEL_EMAIL).create();
-
-		StringBuilder strBuilder = new StringBuilder(smsVerification.getSid()).append(PNMSConstants.PIPE_SEPARATOR)
-				.append(emailVerification.getSid());
-
-		return strBuilder.toString();
-	}
-
-	public String checkOTPVerificationToken(String mobileNumOrEmailId, String code) {
-		Twilio.init(twilioAcctSID, twilioAuthToken);
-
-		VerificationCheck verificationCheck = VerificationCheck.creator(twilioVerificationServiceID, code).setTo(mobileNumOrEmailId).create();
-
-		return verificationCheck.getValid() ? PNMSConstants.OTPCHECK_APPROVED : PNMSConstants.OTPCHECK_NOTAPPROVED;
-
-	}
-
 	@Value("${notification.email.defaultFromAddress}")
 	private String fromAddress;
 	
 	@Autowired
 	private EmailRegVerificationRepository repo;
 	
+	@Autowired
+	private EmailSender mailSender;
+	
+	@Autowired
+	@Qualifier("emailVerificationConfirmationJmsTemplate")
+	private JmsTemplate emailVerificationConfirmationJmsTemplate;
+	
+	public Integer sendOTPVerificationToken(Otpverification requestInfo) throws IllegalAccessException, InstantiationException {
+		Twilio.init(twilioAcctSID, twilioAuthToken);
+
+		// via SMS
+		Verification smsVerification = Verification.creator(twilioVerificationServiceID, requestInfo.getMobileNum(), PNMSConstants.CHANNEL_SMS).create();
+
+		// via Email
+		Verification emailVerification = Verification.creator(twilioVerificationServiceID, requestInfo.getEmailId(), PNMSConstants.CHANNEL_EMAIL).create();
+
+		StringBuilder strBuilder = new StringBuilder(smsVerification.getSid()).append(PNMSConstants.PIPE_SEPARATOR).append(emailVerification.getSid());
+		
+		// Save the Info into DB - START
+		RegVerificationInfo verificationInfo = (RegVerificationInfo)POJOFactory.getInstance("REGVERIFICATIONINFO");
+		
+		verificationInfo.setName(requestInfo.getName());
+		verificationInfo.setEmail(requestInfo.getEmailId());
+		verificationInfo.setMobile(requestInfo.getMobileNum());
+		verificationInfo.setSystemName(requestInfo.getSystemName());
+		verificationInfo.setTwilioOtpSid(strBuilder.toString());
+		
+		repo.save(verificationInfo);
+		// Save the Info into DB - END
+
+		return verificationInfo.getVerificationId();
+	}
+
+	public boolean checkOTPVerificationToken(Otpverificationcheck requestInfo) throws NotFoundException, IllegalAccessException, InstantiationException {
+		Twilio.init(twilioAcctSID, twilioAuthToken);
+
+		VerificationCheck verificationCheck = VerificationCheck.creator(twilioVerificationServiceID, requestInfo.getCode()).setTo(requestInfo.getEmailId() != null ? requestInfo.getEmailId() : requestInfo.getMobileNum()).create();
+
+		if (verificationCheck.getValid() && verificationCheck.getStatus().equals(PNMSConstants.TWILIO_APPROVED_STATUS)) {
+			// Fetch Verification Entry from DB
+			Optional<RegVerificationInfo> verificationInfoOpt = repo.findById(requestInfo.getVerificationId());
+			
+			if (!verificationInfoOpt.isPresent()) {
+				throw new NotFoundException(404, "PNMS - Verification Entry Not Found");
+			} 
+
+			RegVerificationInfo verificationInfo = verificationInfoOpt.get();
+					
+			// Prepare contents required for Email - START
+			EmailInfo emailInfo = (EmailInfo) UIModelFactory.getInstance("EMAILINFO");
+			
+			emailInfo.setFromAddress(fromAddress);
+			emailInfo.setToAddress(verificationInfo.getEmail());
+			emailInfo.setSubject(verificationInfo.getSystemName().toUpperCase() + PNMSConstants.SINGLE_SPACE + PNMSConstants.HYPEN_SEPARATOR + PNMSConstants.SINGLE_SPACE + PNMSConstants.REG_VERIFICATION_CONFIRMATION_EMAILSUBJECT);
+			emailInfo.setTemplateName(PNMSConstants.POSTVERIFICATION_TEMPLATE_KEY);
+	
+			Map<String, Object> contextVariables = new HashMap<String, Object>(2);
+			contextVariables.put("name", verificationInfo.getName());
+			contextVariables.put("systemShortName", verificationInfo.getSystemName().toUpperCase());
+		
+			emailInfo.setContextVariables(contextVariables);
+			// Prepare contents required for Email - END
+			
+			// Send the Email
+			mailSender.sendMail(emailInfo);
+			
+			return true;
+		} else {
+			return false;
+		}
+	}
+	
 	public Integer sendEmailVerification(Emailverification requestInfo) throws IllegalAccessException, InstantiationException {
 		// Save the Info into DB
-		EmailRegVerificationInfo verificationInfo = (EmailRegVerificationInfo)POJOFactory.getInstance("EMAILREGVERIFICATIONINFO");
+		RegVerificationInfo verificationInfo = (RegVerificationInfo)POJOFactory.getInstance("REGVERIFICATIONINFO");
 		
 		verificationInfo.setName(requestInfo.getName());
 		verificationInfo.setEmail(requestInfo.getEmailId());
@@ -115,13 +156,13 @@ public class NotificationService {
 
 	public void checkEmailVerification(Integer verificationId, String code) throws NotFoundException, MismatchException, IllegalAccessException, InstantiationException, JsonProcessingException {
 		// Update 'VERIFICATION_CODE to null if matches
-		Optional<EmailRegVerificationInfo> verificationInfoOpt = repo.findById(verificationId);
+		Optional<RegVerificationInfo> verificationInfoOpt = repo.findById(verificationId);
 		
 		if (!verificationInfoOpt.isPresent()) {
 			throw new NotFoundException(404, "PNMS - Verification Entry Not Found");
 		} 
 
-		EmailRegVerificationInfo verificationInfo = verificationInfoOpt.get();
+		RegVerificationInfo verificationInfo = verificationInfoOpt.get();
 		
 		if (verificationInfo.getVerificationCode().equals(code)) {
 			verificationInfo.setVerificationCode(null);

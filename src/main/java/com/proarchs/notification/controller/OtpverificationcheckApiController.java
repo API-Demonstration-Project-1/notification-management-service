@@ -15,7 +15,6 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.proarchs.notification.constants.PNMSConstants;
 import com.proarchs.notification.model.Otpverificationcheck;
 import com.proarchs.notification.services.NotificationService;
 import com.proarchs.notification.util.ResponsePreparator;
@@ -63,16 +62,16 @@ public class OtpverificationcheckApiController implements OtpverificationcheckAp
     	String accept = request.getHeader("Accept");
         if (accept != null && accept.contains("application/json")) {
             try {
-            	String status = service.checkOTPVerificationToken((body.getEmailId() != null ? body.getEmailId() : body.getMobileNum()), body.getCode());
+            	boolean isSuccess = service.checkOTPVerificationToken(body);
             	
-            	if (status.equals(PNMSConstants.OTPCHECK_APPROVED)) {
+            	if (isSuccess) {
             		String resp = ResponsePreparator.prepareOtpVerificationCheckResponse(null, "OTP Verified Successfully", true, null);
                 	
                 	log.info("otpverificationcheckPOST() exited");
                 	
                 	return new ResponseEntity<String>(resp, HttpStatus.CREATED);
             	} else {
-            		String resp = ResponsePreparator.prepareOtpVerificationCheckResponse(null, "OTP Verification Failed - OTP Not Valid", true, null);
+            		String resp = ResponsePreparator.prepareOtpVerificationCheckResponse(null, "OTP Verification Failed - OTP Not Valid", false, -1);
                 	
                 	log.info("otpverificationcheckPOST() exited");
                 	

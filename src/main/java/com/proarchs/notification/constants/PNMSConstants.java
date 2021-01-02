@@ -61,6 +61,7 @@ public class PNMSConstants {
 	public static final String CHANNEL_SMS = "sms";
 	public static final String CHANNEL_EMAIL = "email";
 	
+	public static final String TWILIO_APPROVED_STATUS = "approved";
 	public static final String OTPCHECK_APPROVED = "Approved";
 	public static final String OTPCHECK_NOTAPPROVED = "NotApproved";
 	

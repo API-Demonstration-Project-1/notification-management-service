@@ -27,9 +27,9 @@ public class Data {
 	}
 	
 	@JsonProperty("id")
-	  private String id = null;
+	  private Integer id = null;
 
-	  public Data id(String id) {
+	  public Data id(Integer id) {
 	    this.id = id;
 	    return this;
 	  }
@@ -42,11 +42,11 @@ public class Data {
 	  @NotNull
 
 
-	  public String getId() {
+	  public Integer getId() {
 	    return id;
 	  }
 
-	  public void setId(String id) {
+	  public void setId(Integer id) {
 	    this.id = id;
 	  }
 

@@ -21,7 +21,7 @@ import com.proarchs.notification.exception.NotFoundException;
 import com.proarchs.notification.factory.POJOFactory;
 import com.proarchs.notification.factory.UIModelFactory;
 import com.proarchs.notification.model.EmailInfo;
-import com.proarchs.notification.model.EmailRegVerificationInfo;
+import com.proarchs.notification.model.RegVerificationInfo;
 import com.proarchs.notification.repository.EmailRegVerificationRepository;
 import com.proarchs.notification.util.EmailSender;
 import com.proarchs.notification.util.JsonFormatter;
@@ -47,16 +47,25 @@ public class JMSNotificationService {
 	
 	@Autowired
 	private EmailSender mailSender;
+	
+	@Value("${notification.email.defaultFromAddress}")
+	private String fromAddress;
+
+	@Autowired
+	private EmailRegVerificationRepository repo;
 
 	@JmsListener(destination = "${activemq.notification.otpverification.inbound}")
 	@SendTo("${activemq.notification.otpverification.outbound}")
-	public String sendOTPVerificationToken(final Message<String> jmsMessage) throws JsonMappingException, JsonProcessingException {
+	public String sendOTPVerificationToken(final Message<String> jmsMessage) throws JsonMappingException, JsonProcessingException, IllegalAccessException, InstantiationException {
 		
 		// Extract all field values from JSON
 		JsonNode nodes = JsonFormatter.convertStringToJsonNode(jmsMessage.getPayload());
+		
+		String name = nodes.get("name").textValue();
 		String mobileNum = nodes.get("mobileNum").textValue();
 		String emailId = nodes.get("emailId").textValue();
 		String tenantId = nodes.get("tenantId").textValue();
+		String systemName = nodes.get("systemName").textValue();
 		
 		// Send OTP - START
 		Twilio.init(twilioAcctSID, twilioAuthToken);
@@ -69,11 +78,23 @@ public class JMSNotificationService {
 		// Send OTP - END
 
 		StringBuilder strBuilder = new StringBuilder(smsVerification.getSid()).append(PNMSConstants.PIPE_SEPARATOR).append(emailVerification.getSid());
+		
+		// Save the Info into DB - START
+		RegVerificationInfo verificationInfo = (RegVerificationInfo)POJOFactory.getInstance("REGVERIFICATIONINFO");
+		
+		verificationInfo.setName(name);
+		verificationInfo.setEmail(emailId);
+		verificationInfo.setMobile(mobileNum);
+		verificationInfo.setSystemName(systemName);
+		verificationInfo.setTwilioOtpSid(strBuilder.toString());
+		
+		repo.save(verificationInfo);
+		// Save the Info into DB - END
 
 		// Prepare the response & send it to the Outbound Queue
 		Map<String, String> elements = new HashMap<String, String>();
 	    elements.put("tenantId", tenantId);
-	    elements.put("verificationId", strBuilder.toString());
+	    elements.put("verificationId", verificationInfo.getVerificationId().toString());
 	    
 	    String jsonResp = JsonFormatter.convertMapToJson(elements);
 	    
@@ -82,7 +103,8 @@ public class JMSNotificationService {
 
 	@JmsListener(destination = "${activemq.notification.otpverificationconfirmation.inbound}")
 	@SendTo("${activemq.notification.otpverificationconfirmation.outbound}")
-	public String checkOTPVerificationToken(final Message<String> jmsMessage) throws JsonProcessingException {
+	public String checkOTPVerificationToken(final Message<String> jmsMessage) throws JsonProcessingException, IllegalAccessException, InstantiationException {
+		
 		// Extract all field values from JSON
 		JsonNode nodes = JsonFormatter.convertStringToJsonNode(jmsMessage.getPayload());
 		
@@ -94,32 +116,64 @@ public class JMSNotificationService {
 			mobileNumOrEmailId = nodes.get("mobileNum").textValue();
 		}
 		String code = nodes.get("code").textValue();
+		String verificationId = nodes.get("verificationId").textValue();
 		
 		// Verify OTP - START
 		Twilio.init(twilioAcctSID, twilioAuthToken);
 		VerificationCheck verificationCheck = VerificationCheck.creator(twilioVerificationServiceID, code).setTo(mobileNumOrEmailId).create();
 		// Verify OTP - END
+		
+		if (verificationCheck.getValid() && verificationCheck.getStatus().equals(PNMSConstants.TWILIO_APPROVED_STATUS)) {
+			// Fetch Verification Entry from DB
+			Optional<RegVerificationInfo> verificationInfoOpt = repo.findById(Integer.parseInt(verificationId));
+			
+			if (!verificationInfoOpt.isPresent()) {
+				// Prepare the error response & send it to the Outbound Queue
+				Map<String, String> elements = new HashMap<String, String>(1);
+			    elements.put("notfoundError", "PNMS - Verification Entry Not Found");
+			    
+			    String jsonResp = JsonFormatter.convertMapToJson(elements);
+			    
+				return jsonResp;
+			} 
 
-		// Prepare the response & send it to the Outbound Queue - START
-		Map<String, String> elements = new HashMap<String, String>(1);
-		if (verificationCheck.getValid() && verificationCheck.getStatus().equals("approved")) {
-		    elements.put("verificationId", verificationCheck.getSid());
-		} else {
-		    elements.put("mismatchError", "PNMS - Verification Code Does Not Match");
-		}
-		    
-	    String jsonResp = JsonFormatter.convertMapToJson(elements);
-	    
-		return jsonResp;
-		// Prepare the response & send it to the Outbound Queue - END
-	}
-
-	@Value("${notification.email.defaultFromAddress}")
-	private String fromAddress;
-
-	@Autowired
-	private EmailRegVerificationRepository repo;
+			RegVerificationInfo verificationInfo = verificationInfoOpt.get();
+					
+			// Prepare contents required for Email - START
+			EmailInfo emailInfo = (EmailInfo) UIModelFactory.getInstance("EMAILINFO");
+			
+			emailInfo.setFromAddress(fromAddress);
+			emailInfo.setToAddress(verificationInfo.getEmail());
+			emailInfo.setSubject(verificationInfo.getSystemName().toUpperCase() + PNMSConstants.SINGLE_SPACE + PNMSConstants.HYPEN_SEPARATOR + PNMSConstants.SINGLE_SPACE + PNMSConstants.REG_VERIFICATION_CONFIRMATION_EMAILSUBJECT);
+			emailInfo.setTemplateName(PNMSConstants.POSTVERIFICATION_TEMPLATE_KEY);
 	
+			Map<String, Object> contextVariables = new HashMap<String, Object>(2);
+			contextVariables.put("name", verificationInfo.getName());
+			contextVariables.put("systemShortName", verificationInfo.getSystemName().toUpperCase());
+		
+			emailInfo.setContextVariables(contextVariables);
+			// Prepare contents required for Email - END
+			
+			// Send the Email
+			mailSender.sendMail(emailInfo);
+			
+			// Prepare the response & send it to the Outbound Queue
+			Map<String, String> elements = new HashMap<String, String>(1);
+		    elements.put("verificationId", verificationInfo.getVerificationId().toString());
+		    
+		    String jsonResp = JsonFormatter.convertMapToJson(elements);
+		    
+			return jsonResp;
+		} else {
+			// Prepare the error response & send it to the Outbound Queue
+			Map<String, String> elements = new HashMap<String, String>(1);
+		    elements.put("mismatchError", "PNMS - Verification OTP Not Valid");
+		    
+		    String jsonResp = JsonFormatter.convertMapToJson(elements);
+		    
+			return jsonResp;
+		}
+	}
 
 	@JmsListener(destination = "${activemq.notification.emailverification.inbound}")
 	@SendTo("${activemq.notification.emailverification.outbound}")
@@ -135,7 +189,7 @@ public class JMSNotificationService {
 		String systemDesc = nodes.get("systemDesc").textValue();
 		
 		// Save the Info into DB - START
-		EmailRegVerificationInfo verificationInfo = (EmailRegVerificationInfo)POJOFactory.getInstance("EMAILREGVERIFICATIONINFO");
+		RegVerificationInfo verificationInfo = (RegVerificationInfo)POJOFactory.getInstance("REGVERIFICATIONINFO");
 		
 		verificationInfo.setName(name);
 		verificationInfo.setEmail(emailId);
@@ -186,7 +240,7 @@ public class JMSNotificationService {
 		String code = nodes.get("code").textValue();
 				
 		// Update 'VERIFICATION_CODE to null if matches
-		Optional<EmailRegVerificationInfo> verificationInfoOpt = repo.findById(Integer.parseInt(verificationId));
+		Optional<RegVerificationInfo> verificationInfoOpt = repo.findById(Integer.parseInt(verificationId));
 		
 		if (!verificationInfoOpt.isPresent()) {
 			// Prepare the error response & send it to the Outbound Queue
@@ -198,7 +252,7 @@ public class JMSNotificationService {
 			return jsonResp;
 		} 
 
-		EmailRegVerificationInfo verificationInfo = verificationInfoOpt.get();
+		RegVerificationInfo verificationInfo = verificationInfoOpt.get();
 		
 		if (verificationInfo.getVerificationCode().equals(code)) {
 			verificationInfo.setVerificationCode(null);

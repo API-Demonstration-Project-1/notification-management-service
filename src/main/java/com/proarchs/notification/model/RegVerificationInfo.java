@@ -27,11 +27,11 @@ import lombok.NoArgsConstructor;
 @EqualsAndHashCode(callSuper = false)
 
 @Entity
-@Table(name = "PNMS_EMAIL_REG_VERIFICATION")
-public class EmailRegVerificationInfo extends Auditable<String> {
+@Table(name = "REG_VERIFICATION_INFO")
+public class RegVerificationInfo extends Auditable<String> {
 	
 	static {
-		POJOFactory.register("EMAILREGVERIFICATIONINFO", EmailRegVerificationInfo.class);
+		POJOFactory.register("REGVERIFICATIONINFO", RegVerificationInfo.class);
 	}
 	
 	@Id
@@ -39,11 +39,17 @@ public class EmailRegVerificationInfo extends Auditable<String> {
 	@Column(name = "VERIFICATION_ID", nullable = false)
 	private Integer verificationId;
 
+	@Column(name = "TWILIO_OTP_SID", nullable = false)
+	private String twilioOtpSid;
+	
 	@Column(name = "NAME", nullable = false)
 	private String name;
 	
 	@Column(name = "EMAIL", nullable = false)
 	private String email;
+	
+	@Column(name = "MOBILE", nullable = false)
+	private String mobile;
 	
 	@Column(name = "VERIFICATION_CODE", nullable = false)
 	private String verificationCode;

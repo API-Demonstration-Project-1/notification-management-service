@@ -35,7 +35,6 @@ public class Emailverificationcheck   {
   @ApiModelProperty(required = true, value = "This is the Verification Code")
   @NotNull
 
-
   public String getVerificationCode() {
     return verificationCode;
   }
@@ -43,7 +42,6 @@ public class Emailverificationcheck   {
   public void setVerificationCode(String verificationCode) {
     this.verificationCode = verificationCode;
   }
-
 
   @Override
   public boolean equals(java.lang.Object o) {

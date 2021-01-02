@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.proarchs.notification.model.Otpverification;
-import com.proarchs.notification.model.Otpverificationresponse;
 import com.proarchs.notification.services.NotificationService;
 import com.proarchs.notification.util.ResponsePreparator;
 import com.twilio.exception.ApiException;
@@ -63,9 +62,9 @@ public class OtpverificationApiController implements OtpverificationApi {
         String accept = request.getHeader("Accept");
         if (accept != null && accept.contains("application/json")) {
             try {
-            	String combinedSid = service.sendOTPVerificationToken(body.getMobileNum(), body.getEmailId());
+            	Integer verificationId = service.sendOTPVerificationToken(body);
             	
-        		String resp = ResponsePreparator.prepareOtpVerificationResponse(combinedSid, "OTP Sent Successfully", true, null);
+        		String resp = ResponsePreparator.prepareOtpVerificationResponse(verificationId, "OTP Sent Successfully", true, null);
             	
             	log.info("otpverificationPOST() exited");
             	

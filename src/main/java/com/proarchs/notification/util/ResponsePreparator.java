@@ -36,7 +36,7 @@ public class ResponsePreparator {
 
 		if (dataInfo != null) {
 			data = (Data) UIModelFactory.getInstance("DATA");
-			data.setId((String) dataInfo);
+			data.setId((Integer)dataInfo);
 		}
 
 		Otpverificationresponse otpVerificationResponse = (Otpverificationresponse) UIModelFactory
@@ -70,7 +70,7 @@ public class ResponsePreparator {
 
 		if (dataInfo != null) {
 			data = (Data) UIModelFactory.getInstance("DATA");
-			data.setId((String) dataInfo);
+			data.setId((Integer) dataInfo);
 		}
 
 		Otpverificationcheckresponse otpVerificationCheckResponse = (Otpverificationcheckresponse) UIModelFactory
@@ -103,7 +103,7 @@ public class ResponsePreparator {
 
 		if (dataInfo != null) {
 			data = (Data) UIModelFactory.getInstance("DATA");
-			data.setId(((Integer)dataInfo).toString());
+			data.setId((Integer)dataInfo);
 		}
 
 		Emailverificationresponse emailVerificationResponse = (Emailverificationresponse) UIModelFactory.getInstance("EMAILVERIFICATIONRESP");
